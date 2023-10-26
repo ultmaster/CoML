@@ -8,6 +8,7 @@ ___all__ = [
     "EmbeddingCache",
 ]
 
+import json
 from dataclasses import dataclass, asdict, is_dataclass, fields
 from pathlib import Path
 from typing import (
@@ -67,14 +68,14 @@ class SqliteSerializable(Generic[PrimaryKey]):
             )
 
     @classmethod
-    def insert_many(cls: Type[Self], rows: List[Self]) -> None:
+    def insert_many(cls: Type[Self], rows: Iterable[Self]) -> None:
         assert is_dataclass(cls)
         with database_connection() as conn:
             field_names = [f.name for f in fields(cls)]
             conn.executemany(
                 f"""
                     INSERT INTO {cls.__name__.upper()} ({", ".join(field_names)})
-                    VALUES ({", ".join("?" * len(field_names))}))
+                    VALUES ({", ".join("?" * len(field_names))})
                 """,
                 [row.to_tuple() for row in rows],
             )
@@ -88,7 +89,7 @@ class SqliteSerializable(Generic[PrimaryKey]):
                 FROM {cls.__name__.upper()}
             """
             ).fetchall():
-                yield cls.from_tuple(row)
+                yield cls.from_tuple(*row)
 
     @classmethod
     def get(cls: Type[Self], pk: PrimaryKey) -> Self:
@@ -112,7 +113,7 @@ class SqliteSerializable(Generic[PrimaryKey]):
                 """,
                     pk,
                 ).fetchone()
-            return cls.from_tuple(row)
+            return cls.from_tuple(*row)
 
 
 class Condition(TypedDict):
@@ -124,12 +125,12 @@ class Parameter:
     name: str
     dtype: Literal["int", "float", "str", "bool", "any"]
     categorical: bool
-    choices: List[str]
-    low: Optional[float]
-    high: Optional[float]
-    log_distributed: Optional[bool]
-    condition: Optional[Condition]
-    quantiles: Optional[float]
+    choices: Optional[List[str]] = None
+    low: Optional[float] = None
+    high: Optional[float] = None
+    log_distributed: Optional[bool] = None
+    condition: Optional[Condition] = None
+    quantiles: Optional[float] = None
 
 
 @dataclass
@@ -143,7 +144,7 @@ class Space(SqliteSerializable[str]):
         id VARCHAR(64) NOT NULL PRIMARY KEY,
         name VARCHAR(256) NOT NULL,
         description TEXT NOT NULL,
-        parameters JSON NOT NULL
+        parameters TEXT NOT NULL
     """
     primary_key = "id"
 
@@ -152,7 +153,7 @@ class Space(SqliteSerializable[str]):
             self.id,
             self.name,
             self.description,
-            [asdict(p) for p in self.parameters],
+            json.dumps([asdict(p) for p in self.parameters]),
         )
 
     @classmethod
@@ -161,7 +162,7 @@ class Space(SqliteSerializable[str]):
             id=id,
             name=name,
             description=description,
-            parameters=[Parameter(**p) for p in parameters],
+            parameters=[Parameter(**p) for p in json.loads(parameters)],
         )
 
 
@@ -194,16 +195,14 @@ class Solution(SqliteSerializable[str]):
     space: Space
     context: List[Context]
     config: Config
-    cano_config: Config
-    metric: Optional[float]
-    feedback: Optional[str]
+    metric: Optional[float] = None
+    feedback: Optional[str] = None
 
     database_schema = """
         id VARCHAR(64) NOT NULL PRIMARY KEY,
         space VARCHAR(64) NOT NULL,
-        context JSON NOT NULL,
-        config JSON NOT NULL,
-        cano_config JSON NOT NULL,
+        context TEXT NOT NULL,
+        config TEXT NOT NULL,
         metric FLOAT,
         feedback STR
     """
@@ -213,21 +212,19 @@ class Solution(SqliteSerializable[str]):
         return (
             self.id,
             self.space.id,
-            [c.id for c in self.context],
-            self.config,
-            self.cano_config,
+            json.dumps([c.id for c in self.context]),
+            json.dumps(self.config),
             self.metric,
             self.feedback,
         )
 
     @classmethod
-    def from_tuple(cls, id, space, context, config, cano_config, metric, feedback):
+    def from_tuple(cls, id, space, context, config, metric, feedback):
         return cls(
             id=id,
             space=Space.get(space),
-            context=[Context.get(c) for c in context],
-            config=config,
-            cano_config=cano_config,
+            context=[Context.get(c) for c in json.loads(context)],
+            config=json.loads(config),
             metric=metric,
             feedback=feedback,
         )
@@ -237,26 +234,26 @@ class Solution(SqliteSerializable[str]):
 class Guideline(SqliteSerializable[str]):
     id: str
     space: Space
-    context: List[Context]
+    context: Optional[List[Context]]
     guideline: str
 
     database_schema = """
         id VARCHAR(64) NOT NULL PRIMARY KEY,
         space VARCHAR(64) NOT NULL,
-        context JSON NOT NULL,
+        context TEXT,
         guideline TEXT NOT NULL
     """
     primary_key = "id"
 
     def to_tuple(self):
-        return (self.id, self.space.id, [c.id for c in self.context], self.guideline)
+        return (self.id, self.space.id, json.dumps([c.id for c in self.context]) if self.context is not None else None, self.guideline)
 
     @classmethod
     def from_tuple(cls, id, space, context, guideline):
         return cls(
             id=id,
             space=Space.get(space),
-            context=[Context.get(c) for c in context],
+            context=[Context.get(c) for c in json.loads(context)] if context is not None else None,
             guideline=guideline,
         )
 
