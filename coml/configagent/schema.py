@@ -28,7 +28,7 @@ from typing import (
 
 import numpy as np
 import sqlite3
-from typing_extensions import Self
+from typing_extensions import Self, NotRequired
 
 # Override this variable to change the database path
 database_path = Path.home() / ".coml" / "configagent.sqlite"
@@ -117,7 +117,7 @@ class SqliteSerializable(Generic[PrimaryKey]):
 
 
 class Condition(TypedDict):
-    match: Optional[Config]
+    match: NotRequired[Config]
 
 
 @dataclass
@@ -125,11 +125,14 @@ class Parameter:
     name: str
     dtype: Literal["int", "float", "str", "bool", "any"]
     categorical: bool
+    required: bool | Condition = True    # Whether the field must be set. It could be conditional on other fields.
+    has_default: bool = False            # Whether the field has a default value. "Not required" doesn't mean it must have a default value.
+    default_value: Optional[Any] = None  # Meaningful only when has_default is true.
+    description: Optional[str] = None
     choices: Optional[List[str]] = None
     low: Optional[float] = None
     high: Optional[float] = None
     log_distributed: Optional[bool] = None
-    condition: Optional[Condition] = None
     quantiles: Optional[float] = None
 
 
