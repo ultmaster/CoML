@@ -126,6 +126,7 @@ class Parameter:
     dtype: Literal["int", "float", "str", "bool", "any"]
     categorical: bool
     required: bool | Condition = True    # Whether the field must be set. It could be conditional on other fields.
+    nullable: bool = False               # Whether the field can be set to null value.
     has_default: bool = False            # Whether the field has a default value. "Not required" doesn't mean it must have a default value.
     default_value: Optional[Any] = None  # Meaningful only when has_default is true.
     description: Optional[str] = None
