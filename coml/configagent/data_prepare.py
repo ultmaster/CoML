@@ -127,6 +127,7 @@ def prepare_sklearn_spaces():
 You will be given a docstring of a function. Please summarize it in the following YAML format:
                                    
 <parameter 0 name>:
+  dtype: <int|float|str|bool>  # keep this line if the parameter belongs to one of these types, otherwise omit this line
   choices: <list of choices>   # if the parameter has a limited number of choices, otherwise omit this line
   low: <number>                # if the parameter is a number and its lower bound is mentioned in the docstring, otherwise omit this line
   high: <number>               # if the parameter is a number and its upper bound is mentioned in the docstring, otherwise omit this line
@@ -142,6 +143,10 @@ You will be given a docstring of a function. Please summarize it in the followin
     for api in apis:
         if "/" in api:
             continue
+
+        docstring = _import(api).__doc__
+        llm_response = llm([system_message, HumanMessage(content=docstring)])
+        llm_types = yaml.safe_load(llm_response)
 
         params = []
         parameters = kaggle_data[kaggle_data["api"] == api]["parameters"].tolist()
@@ -171,10 +176,13 @@ You will be given a docstring of a function. Please summarize it in the followin
                 nullable = True
                 empirical_values = [e for e in empirical_values if e not in ("None", None)]
 
+            inferred_dtype = None
             choices = None
             description = None
             low = None
             high = None
+
+
 
             log_distributed = None
             quantiles = None
