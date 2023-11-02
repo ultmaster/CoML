@@ -2,6 +2,7 @@ import inspect
 import json
 
 import pandas as pd
+import yaml
 
 from .data_manager import create_tables
 from .schema import *
@@ -116,13 +117,15 @@ def prepare_sklearn_spaces():
     kaggle_data = pd.read_json("coml/configagent/data/kaggle.jsonl", lines=True)
     apis = list(kaggle_data["api"].unique())
 
-    from langchain.chat_models import AzureChatOpenAI
+    # from langchain.chat_models import AzureChatOpenAI
+    from langchain.chat_models import ChatOpenAI
     from langchain.schema import SystemMessage, HumanMessage
 
     import dotenv
     dotenv.load_dotenv()
 
-    llm = AzureChatOpenAI(max_retries=10, temperature=0.)
+    # llm = AzureChatOpenAI(deployment_name="gpt-4-32k", temperature=0., request_timeout=600, max_retries=20)
+    llm = ChatOpenAI(model_name="gpt-4", temperature=0.)
     system_message = SystemMessage(content="""
 You will be given a docstring of a function. Please summarize it in the following YAML format:
                                    
@@ -134,19 +137,24 @@ You will be given a docstring of a function. Please summarize it in the followin
   description: <string>        # write a description of this parameter, in 1-3 sentences
 <parameter 1 name>:
   ...                       
-"""
+""".strip()
     )
 
 
     results = {}
+
+    fp = open("coml/configagent/data/sklearn_spaces.yaml", "w")
 
     for api in apis:
         if "/" in api:
             continue
 
         docstring = _import(api).__doc__
+        print(api)
+        print(docstring)
         llm_response = llm([system_message, HumanMessage(content=docstring)])
-        llm_types = yaml.safe_load(llm_response)
+        print(llm_response.content)
+        llm_types = yaml.safe_load(llm_response.content)
 
         params = []
         parameters = kaggle_data[kaggle_data["api"] == api]["parameters"].tolist()
@@ -182,7 +190,27 @@ You will be given a docstring of a function. Please summarize it in the followin
             low = None
             high = None
 
-
+            llm_infer = llm_types.get(name, llm_types.get(param_name))
+            if llm_infer is not None:
+                inferred_dtype = llm_infer.get("dtype")
+                if inferred_dtype is not None:
+                    if inferred_dtype == "float" and all(isinstance(v, (int, float)) for v in empirical_values):
+                        dtype = "float"
+                    elif inferred_dtype == "int" and all(isinstance(v, int) for v in empirical_values):
+                        dtype = "int"
+                    elif inferred_dtype == "bool" and all(isinstance(v, bool) for v in empirical_values):
+                        dtype = "bool"
+                    elif inferred_dtype == "str" and all(isinstance(v, str) for v in empirical_values):
+                        dtype = "str"
+                choices = llm_infer.get("choices")
+                description = llm_infer.get("description")
+                if dtype in ("int", "float"):
+                    low = llm_infer.get("low")
+                    high = llm_infer.get("high")
+                    if low is not None and low > min(empirical_values):
+                        low = min(empirical_values)
+                    if high is not None and high < max(empirical_values):
+                        high = max(empirical_values)
 
             log_distributed = None
             quantiles = None
@@ -216,11 +244,8 @@ You will be given a docstring of a function. Please summarize it in the followin
                 quantiles=quantiles,
             ))
 
-        results[api] = [asdict(p) for p in params]
-
-    with open("coml/configagent/data/sklearn_spaces.json", "w") as f:
-        json.dump(results, f, indent=2)
-
+        fp.write(yaml.safe_dump({api: [asdict(p) for p in params]}) + "\n")
+        fp.flush()
 
 # def inject_kaggle_data():
 
