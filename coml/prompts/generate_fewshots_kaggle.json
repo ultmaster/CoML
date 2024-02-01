@@ -7,8 +7,8 @@
       "import pandas as pd\n\ndataset = pd.read_csv(\"data/movie_metadata.csv\")",
       "dataset.isnull().sum()"
     ],
-    "request": "List the major genres in the dataset. Show the result in a DataFrame with columns `genre` and `count` (number of movies of that genre).\n",
-    "answer": "# Create a new variable to avoid unintentional modifications to raw DataFrame.\ngenres = pd.DataFrame({\n    \"movie\": dataset[\"movie_title\"],\n    \"genre\": dataset[\"genres\"].apply(lambda x: x.split(\"|\")[0]),\n})\n\n# Count the number of movies in each genre.\ngenres.groupby(\"genre\").count()[[\"movie\"]].rename(columns={\"movie\": \"count\"}).reset_index()"
+    "request": "Show the number of movies for each major genre, in a DataFrame with genre as index and count as the only column. The counts should be in descending order.",
+    "answer": "pd.Series(dataset[\"genres\"].apply(lambda x: x.split(\"|\")[0])).value_counts().rename(\"count\").to_frame()"
   },
   {
     "variables": {
@@ -21,7 +21,7 @@
       "iris = pd.read_csv(\"data/iris.csv\", index_col=\"Id\")",
       "from scipy.stats import normaltest\nz, pval = normaltest(iris[\"SepalLengthCm\"])\npval"
     ],
-    "request": "Analyze the correlations of the dataset. Eliminate upper triangle for readability.\n",
+    "request": "Analyze the correlations of the dataset. Eliminate upper triangle for readability.",
     "answer": "corr = iris.select_dtypes(\"number\").corr(method=\"pearson\")\ncorr.where(np.tril(np.ones(corr.shape)).astype(bool))"
   },
   {
@@ -36,7 +36,7 @@
       "test_data = pd.read_csv(\"data/titanic_test.csv\")\ntest_data.shape",
       "women = train_data.loc[train_data.Sex == \"female\"][\"Survived\"]\nsum(women) / len(women) * 100"
     ],
-    "request": "List out the names with age 42.\n",
+    "request": "List out the names with age 42.",
     "answer": "train_data.loc[train_data.Age == 42, \"Name\"].tolist()"
   },
   {
@@ -48,7 +48,7 @@
       "twc = pd.read_csv(\"data/twc-sample.csv\")",
       "import string\n\ndef remove_punctuation(text: str):\n    return text.lower().translate(str.maketrans(\"\", \"\", string.punctuation))\n\ntwc[\"text_wo_punct\"] = twc[\"text\"].apply(remove_punctuation)"
     ],
-    "request": "Remove English stopwords from the `text_wo_punct` column. Save the result in a new column `text_wo_stopwords`.\n",
+    "request": "Remove English stopwords from the `text_wo_punct` column. Save the result in a new column `text_wo_stopwords`.",
     "answer": "from nltk.corpus import stopwords\n\nSTOPWORDS = set(stopwords.words(\"english\"))\n\ntwc[\"text_wo_stopwords\"] = twc[\"text_wo_punct\"].apply(\n    lambda text: \" \".join([word for word in str(text).split() if word not in STOPWORDS])\n)"
   },
   {
@@ -64,7 +64,7 @@
       "import numpy as np\nfrom scipy import stats\n\nz = np.abs(stats.zscore(df))\ndf[(z < 3).all(axis=1)]",
       "from sklearn.model_selection import train_test_split\n\nX = df.drop(columns=\"quality\")\ny = df[\"quality\"]"
     ],
-    "request": "Split X and y into train and test sets. Use 20% of the data for testing.\nSet random state to 42.\nFit a RandomForestClassifier `clf` with 100 estimators on the training data, also using random state 42.\n",
+    "request": "Split X and y into train and test sets. Use 20% of the data for testing.\nSet random state to 42.\nFit a RandomForestClassifier `clf` with 100 estimators on the training data, also using random state 42.",
     "answer": "from sklearn.ensemble import RandomForestClassifier\n\nX_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)\nclf = RandomForestClassifier(n_estimators=100, random_state=42)\nclf.fit(X_train, y_train)"
   }
 ]
